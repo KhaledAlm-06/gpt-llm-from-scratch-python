@@ -1,0 +1,16 @@
+Project ID: 6
+Title: A Large Language Model (LLM)
+Category: AI Model
+Language: Python
+Source Tutorial URL: https://github.com/rasbt/LLMs-from-scratch
+
+SKILLS USED:
+- Byte-Pair Encoding (BPE) subword tokenization and special-token splitting
+- Reverse-mode automatic differentiation over dynamic computation graphs
+- Multi-head causal self-attention with upper-triangular future masking
+- Pre-LayerNorm GPT transformer block with GELU MLP and residual streams
+- AdamW optimizer with bias-corrected momentum and decoupled weight decay
+- Autoregressive decoding (greedy, temperature scaling, and top-k sampling)
+
+WHAT I LEARNED MAKING THIS:
+Building a GPT transformer without PyTorch makes the mechanics of causal attention concrete: every token position t builds query vectors that are strictly forbidden from attending to keys/values at s > t, enforcing autoregressive generation during parallel sequence training. Pre-LayerNorm stabilizes residual gradient flow across transformer layers, while BPE cleanly bridges raw character vocabularies and frequent words using deterministic merge rules.
