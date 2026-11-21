@@ -16,4 +16,18 @@ A self-contained, zero-dependency GPT-style decoder-only Large Language Model bu
 ## How to Run
 ```bash
 python main.py
+python main.py --epochs 20 --prompt "the dog " --max-tokens 8 --temperature 0.7 --top-k 4
+```
+
+### CLI Options
+- `--epochs`: Training epochs (default `18`)
+- `--prompt`: Seed text for generation (default `"the cat "`)
+- `--max-tokens`: Tokens to generate (default `6`)
+- `--temperature`: Sampling temperature; `0.0` runs greedy decoding
+- `--top-k`: Top-k sampling cutoff (`0` disables cutoff)
+- `--seed`: Random seed for initialization and sampling
+
+### Unit Tests
+```bash
+python -m unittest discover -s tests -v
 ```

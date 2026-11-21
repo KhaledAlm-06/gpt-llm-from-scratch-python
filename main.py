@@ -10,6 +10,7 @@ Implements Sebastian Raschka's 'LLMs from scratch' core stack:
 
 from __future__ import annotations
 
+import argparse
 import math
 import random
 import re
@@ -382,7 +383,7 @@ class GPTModel:
         prompt_ids: List[int],
         max_new_tokens: int = 12,
         temperature: float = 0.7,
-        top_k: int = 4,
+        top_k: Optional[int] = 4,
         seed: int = 7,
     ) -> List[int]:
         rng = random.Random(seed)
@@ -394,7 +395,9 @@ class GPTModel:
                 next_id = max(range(len(logits)), key=lambda i: logits[i])
             else:
                 scaled = [l / temperature for l in logits]
-                ranked = sorted(range(len(scaled)), key=lambda i: scaled[i], reverse=True)[:top_k]
+                ranked = sorted(range(len(scaled)), key=lambda i: scaled[i], reverse=True)
+                if top_k is not None and top_k > 0:
+                    ranked = ranked[:top_k]
                 max_s = scaled[ranked[0]]
                 probs = [math.exp(scaled[i] - max_s) for i in ranked]
                 total = sum(probs)
@@ -436,7 +439,19 @@ class AdamW:
             p.data -= self.lr * (m_hat / (math.sqrt(v_hat) + eps) + self.weight_decay * p.data)
 
 
-def main() -> None:
+def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Train and sample from a minimal pure-Python GPT model.")
+    parser.add_argument("--epochs", type=int, default=18, help="Number of training epochs (default: 18).")
+    parser.add_argument("--prompt", type=str, default="the cat ", help="Prompt text for generation.")
+    parser.add_argument("--max-tokens", type=int, default=6, help="Number of new tokens to generate.")
+    parser.add_argument("--temperature", type=float, default=0.0, help="Sampling temperature (0 for greedy).")
+    parser.add_argument("--top-k", type=int, default=4, help="Top-k cutoff when sampling (0 disables cutoff).")
+    parser.add_argument("--seed", type=int, default=42, help="Random seed for weight initialization and sampling.")
+    return parser.parse_args(argv)
+
+
+def main(argv: Optional[List[str]] = None) -> None:
+    args = parse_args(argv)
     corpus = (
         "the cat sat on the mat <|endoftext|> "
         "the cat ate the fish <|endoftext|> "
@@ -452,13 +467,20 @@ def main() -> None:
     assert tokenizer.inverse_vocab["<|endoftext|>"] in encoded
 
     tokens = tokenizer.encode(corpus)
-    model = GPTModel(vocab_size=len(tokenizer.vocab), ctx_len=16, d_model=8, n_heads=2, n_layers=1, seed=42)
+    model = GPTModel(
+        vocab_size=len(tokenizer.vocab),
+        ctx_len=16,
+        d_model=8,
+        n_heads=2,
+        n_layers=1,
+        seed=args.seed,
+    )
     optimizer = AdamW(model.parameters(), lr=0.08, weight_decay=0.005)
 
     # Train on sliding sequence windows
     windows = [tokens[i : i + 7] for i in range(0, min(len(tokens) - 7, 8), 4)]
     losses: List[float] = []
-    for epoch in range(18):
+    for _ in range(args.epochs):
         epoch_loss = 0.0
         for win in windows:
             x_seq = win[:-1]
@@ -475,18 +497,27 @@ def main() -> None:
             epoch_loss += loss.data
         losses.append(epoch_loss / len(windows))
 
-    assert losses[-1] < losses[0] * 0.55, f"Expected training loss to drop sharply: {losses[0]:.3f} -> {losses[-1]:.3f}"
+    if args.epochs >= 18:
+        assert losses[-1] < losses[0] * 0.55, f"Expected training loss to drop sharply: {losses[0]:.3f} -> {losses[-1]:.3f}"
 
-    prompt = tokenizer.encode("the cat ")
-    gen_ids = model.generate(prompt, max_new_tokens=6, temperature=0.0)
+    prompt = tokenizer.encode(args.prompt)
+    gen_ids = model.generate(
+        prompt,
+        max_new_tokens=args.max_tokens,
+        temperature=args.temperature,
+        top_k=args.top_k if args.top_k > 0 else None,
+        seed=args.seed,
+    )
     gen_text = tokenizer.decode(gen_ids)
-    assert gen_text.startswith("the cat ") and len(gen_text) > len("the cat ")
+    if args.max_tokens > 0:
+        assert len(gen_text) > len(args.prompt)
 
     print("=== A Large Language Model (GPT-2 + BPE + Autograd) Passed ===")
     print(f"BPE vocab size: {len(tokenizer.vocab)} | Merges learned: {len(tokenizer.merges)}")
     print(f"GPT parameters: {len(model.parameters())}")
-    print(f"Training cross-entropy loss: epoch 1 = {losses[0]:.4f} -> epoch {len(losses)} = {losses[-1]:.4f}")
-    print(f"Greedy generation from 'the cat ': {gen_text!r}")
+    if losses:
+        print(f"Training cross-entropy loss: epoch 1 = {losses[0]:.4f} -> epoch {len(losses)} = {losses[-1]:.4f}")
+    print(f"Generation from {args.prompt!r}: {gen_text!r}")
 
 
 if __name__ == "__main__":
